@@ -1,4 +1,4 @@
-# CP11portfolio
+# CP12portfolio
 
 ## About Me
 My name is JJ and i'm taking computer programming 12 ts year.
