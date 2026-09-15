@@ -38,7 +38,7 @@ while True:
         if whichansCurrent != prevAns:
             print("------------------------------------------")
             print("thinking......")
-            time.sleep(4)
+            time.sleep(1)
             print(answers[whichansCurrent]) #print the answer from its index
 
             # WINDOW STUFF
@@ -46,6 +46,14 @@ while True:
             root.title("that's the 8 ball")
             root.geometry("500x500")
 
+
+            root.attributes("-topmost", True)     #
+            root.update()                         #
+            root.attributes("-topmost", False)    # makes the window be focused so when you click space it doesn't literally type a space into the VS code or Pycharm or whaytever window
+            root.focus_force()                    #
+                                                  #
+
+ 
             eightsphere = tk.PhotoImage(file="8ball.png") #var holds the image
             
             canvas = tk.Canvas(root, highlightthickness=0) #for putting images onto
@@ -54,6 +62,8 @@ while True:
             eightballiamge = canvas.create_image(250, 250, anchor=tk.CENTER, image=eightsphere) #put the image onto the canvas
             
             textandswer = canvas.create_text(250, 250, text=answers[whichansCurrent], font=("Arial", 16, "bold"), fill="white", justify="center") #put the text onto the wondow
+            textandswer = canvas.create_text(250, 450, text="(space to close window)", font=("Arial", 10, "bold"), fill="white", justify="center") #close text
+            root.bind("<space>", lambda event: root.destroy())
             # END WINDOW STUFF
             
             gotNewAns = 1
