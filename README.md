@@ -1,5 +1,5 @@
 ## About Me
-My name is JJ James Jackson Bird and i'm taking computer programming 12 ts year.
+My name is JJ Bird and i'm taking computer programming 12 ts year.
 
 ## Arch Linux
 
