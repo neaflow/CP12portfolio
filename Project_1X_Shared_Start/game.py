@@ -48,6 +48,13 @@ left = roomsinrow
 rowssofar=0
 
 inroom = random.randint(1, numofrooms)
+crownroom = 0
+
+while True:
+    crownroom = random.randint(1, numofrooms)
+    if (crownroom != inroom):
+        break
+
 rooms=[]
 def printroomgrid():
     print("#############################################")
@@ -60,10 +67,14 @@ def printroomgrid():
             else:
                 oneortwo = str(item)
             # 2. Check if this is the room we are currently in
-            if item == inroom:
-                print("[" + oneortwo + "]", end=" ")  # Highlights current room: [05]
+            if item == inroom and item != crownroom:
+                print("[ " + oneortwo + " ]", end=" ")  # Highlights current room: [05]
+            elif item != inroom and item == crownroom:
+                print(" ♕" + oneortwo + "  ", end=" ")  # Highlights current room: [05]
+            elif item == inroom and item == crownroom:
+                print("[♕" + oneortwo + " ]", end=" ")  # Highlights current room: [05]
             else:
-                print(" " + oneortwo + " ", end=" ")  # Highlights current room: [05]
+                print("  " + oneortwo + "  ", end=" ")  # Highlights current room: [05]
     print()
     print("#############################################")
 for i in range(numofrooms):
@@ -93,21 +104,27 @@ print("you are in room #" + str(inroom))
 while True:
     print(" ")
     act=input("WASD to move forward left back right, \",\" to pickup: ")
-    if (act=="W"):
+    if (act=="W" or act=="w"):
         if(inroom-roomsinrow>0):
+            print("you move forward")
             inroom =inroom-roomsinrow
             printroomgrid()
-    if (act=="S"):
-        if(inroom+roomsinrow<numofrooms):
+    elif (act=="S" or act=="s"):
+        print()
+        if(inroom+roomsinrow<=numofrooms):
             inroom =inroom+roomsinrow
             printroomgrid()
-    if (act=="A"):
+    elif (act=="A" or act=="a"):
         if(int(inroom) not in leftedgenums):
             inroom =inroom-1
             printroomgrid()
-    if (act=="D"):
+    elif (act=="D" or act=="d"):
         if(int(inroom) not in rightedgenums):
             inroom =inroom+1
             printroomgrid()
+    elif (act==","):
+        pass
+    else:
+        print("You can't do that.")
     
 
