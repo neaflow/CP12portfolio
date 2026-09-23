@@ -9,6 +9,7 @@ trait_health_damage = {
     "electro": [3, 0.1],
 }
 rooms=[]
+inv=[]
 numofrooms = random.randint(30, 50)
 
 print("-------------------------")
@@ -55,26 +56,49 @@ while True:
     if (crownroom != inroom):
         break
 
+while True:
+    doorroom = random.randint(1, numofrooms)
+    if (doorroom != inroom and doorroom != crownroom):
+        break
+
 rooms=[]
 def printroomgrid():
     print("#############################################")
+
     for item in rooms:
         if item == '\n':
             print()
+            continue
+
+        if item < 10:
+            oneortwo = "00" + str(item)
         else:
-            if item < 10:
-                oneortwo = "0" + str(item)
-            else:
-                oneortwo = str(item)
-            # 2. Check if this is the room we are currently in
-            if item == inroom and item != crownroom:
-                print("[ " + oneortwo + " ]", end=" ")  # Highlights current room: [05]
-            elif item != inroom and item == crownroom:
-                print(" ♕" + oneortwo + "  ", end=" ")  # Highlights current room: [05]
-            elif item == inroom and item == crownroom:
-                print("[♕" + oneortwo + " ]", end=" ")  # Highlights current room: [05]
-            else:
-                print("  " + oneortwo + "  ", end=" ")  # Highlights current room: [05]
+            oneortwo = "0" + str(item)
+
+        # Player and door are in the same room
+        # if item == inroom and item == doorroom:
+        #     print("[U/D]", end=" ")
+
+        if item == inroom:
+            if (inroom != crownroom and inroom != doorroom):
+                print("[ U ]", end=" ")
+            if item == doorroom:
+                print("[🚪︎U]", end=" ")
+                
+            if item == crownroom:
+                print("[♛U ]", end=" ")
+                
+        elif (inroom != doorroom and item==doorroom):
+            if item == doorroom:
+                print("[🚪︎ ]", end=" ")
+
+        elif (inroom != crownroom and item==crownroom):
+            if item == crownroom:
+                print("[♛  ]", end=" ")
+
+        # Normal room
+        else:
+            print("[" + oneortwo + "]", end=" ")
     print()
     print("#############################################")
 for i in range(numofrooms):
@@ -123,8 +147,13 @@ while True:
             inroom =inroom+1
             printroomgrid()
     elif (act==","):
-        pass
+        if (inroom==crownroom):
+            inv.append("crown")
+            crownroom=-1
+            printroomgrid()
+            print("picked up le crown")
+        else:
+            print("nothing to pickup")
     else:
         print("You can't do that.")
-    
-
+        printroomgrid()
