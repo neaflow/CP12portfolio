@@ -1,64 +1,31 @@
 #NOTE: a lot of this code was *borrowed* from OpenAI and openrouter docs. shoutout them. the rest was written by me running on fumes in a 13-hours straight session
 #i had to make sure that these were all installed on the school comptuers without needing to pip install anything
-from pathlib import Path#finding logos and words.txt
+from pathlib import Path#finding words.txt
 import json#openrouter api sends json
 import queue#need this for streaming token by token
-import random#randomly choose word and model
+import random#randomly choose the answer word
 import re#finding GUESS: xxxxx in the LLM response and setting it as the guess
 import threading#makes the LLM stuff run seperately from the widnow so the windoew doens't freeze while the llm works
 import tkinter#making the winow
 from urllib.error import HTTPError, URLError#errors
 from urllib.request import Request, urlopen#making requests on the internet
 
-
 # the files and settings that never change
 words_file = Path(__file__).with_name("words.txt")
-logo_dir = Path(__file__).with_name("logos")
 api_url = "https://openrouter.ai/api/v1/chat/completions"
 max_guesses = 6
 word_length = 5
-logo_size = 20
-
 
 #kept having to adjust these nex variables until it'd stop being stupid
+#update: this is mostly old legacy stuff from the old LLM options that were completely broken and braindead. this was to try to help them. they're hopeless.
 max_reply_tokens = 1200
-
 max_think_tokens = 150
-
 thinking_off = 0
-
 max_retries = 3
-
 max_restarts = 3
 
-#the hardcoded cheap models you can pick from the dropdown menu
-models = [
-    {
-        "id": "openai/gpt-6-luna",
-        "label": "(BEST) GPT-6 Luna",
-        "logo": "openai.png",
-    },
-    {
-        "id": "deepseek/deepseek-v4.1-flash",
-        "label": "DeepSeek V4.1 Flash",
-        "logo": "deepseek.png",
-    },
-    {
-        "id": "inception/mercury-2.5",
-        "label": "(WORST) Mercury 2.5",
-        "logo": "mercury.png",
-    },
-    {
-        "id": "z-ai/glm-5.3-flash",
-        "label": "GLM 5.3 Flash",
-        "logo": "zai.png",
-    },
-    {
-        "id": "inclusionai/ling-3.0-flash-vl",
-        "label": "Ling 3.0 Flash VL",
-        "logo": "inclusionai.png",
-    },
-]
+#the only model this game uses. the other ones are just not good enough. i can't figure out how to fix them. i've tried for hours. if you think you can fix it, godspeed.
+model_id = "openai/gpt-6-luna"
 
 
 system_prompt = """You're playing Wordle. The answer is a common five-letter English word. You have six guesses.
@@ -135,9 +102,6 @@ tiles = []
 key_buttons = {}
 llm_output = None
 llm_button = None
-model_button = None
-model_photos = []
-model_index = 0
 
 responses = None
 stream_tokens = None
@@ -167,28 +131,6 @@ def load_words():
 
     words.sort()
     return words
-
-#load logos but don't break if it's missing for whatever reason
-def load_logo(path):
-    if not path.exists():
-        return None
-    try:
-        return tkinter.PhotoImage(file=str(path))
-    except tkinter.TclError:
-        return None
-
-#if the above ran then make it fit
-def scale_logo(photo, size=20):
-    width = photo.width()
-    height = photo.height()
-    if width <= size and height <= size:
-        return photo
-    try:
-        factor = max(1, round(max(width, height) / size))
-        return photo.subsample(factor, factor)
-    except tkinter.TclError:
-        return photo
-
 
 def score_guess(guess, answer):
     marks = ["absent"] * word_length
@@ -295,77 +237,6 @@ def describe_board():
         + "You have played " + str(len(llm_guesses)) + " words. You have " + str(left) + " guesses left.\n"
         + "Words you have already played, all banned: " + ", ".join(llm_guesses) + ".\n"
     )
-
-
-#cureent model
-def current_model():
-    return models[model_index]
-
-
-def refresh_model_label():
-    # put the name and the logo of the picked model onto the button
-    onemodel = current_model()
-    model_button.config(
-        text="  " + onemodel["label"] + "  ▲",
-        image=model_photos[model_index],
-        compound="left",
-    )
-
-#when a model is chosen
-def choose_model(index):
-    global model_index
-    model_index = index
-    refresh_model_label()
-    on_model_selected(models[index])
-
-#random model
-def pick_random_model():
-    choose_model(random.randrange(len(models)))
-
-#makes the model selecting list
-def build_model_picker(parent):
-    #this is the dropdown menu where you pick which model plays
-    global model_button, model_photos, model_index
-
-    model_index = 0
-    model_photos = []
-
-    model_button = tkinter.Menubutton(
-        parent,
-        text="Model",
-        font=("Helvetica", 10, "bold"),
-        relief="flat",
-        bg=colors["key"],
-        padx=10,
-        pady=7,
-    )
-    model_menu = tkinter.Menu(model_button, tearoff=0)
-    model_button.configure(menu=model_menu, direction="above")
-
-    for index in range(len(models)):
-        onemodel = models[index]
-        photo = load_logo(logo_dir / onemodel["logo"])
-        if photo is not None:
-            photo = scale_logo(photo, logo_size)
-        model_photos.append(photo)
-        entry_options = {
-            "label": onemodel["label"],
-            "command": lambda i=index: choose_model(i),
-        }
-        if photo is not None:
-            entry_options["image"] = photo
-            entry_options["compound"] = "left"
-        model_menu.add_command(**entry_options)
-
-    model_menu.add_separator()
-    model_menu.add_command(label="Random model", command=pick_random_model)
-
-    refresh_model_label()
-    model_button.pack(side="left")
-
-
-def on_model_selected(model):
-    set_llm_output("Model selected: " + model["id"] + "\nPress Start LLM game to let it play this board.\n")
 
 
 def add_key(parent, label, command, wide=False):
@@ -520,8 +391,6 @@ def build_the_game():
     button_row = tkinter.Frame(llm_panel, bg="#f4f4f4")
     button_row.pack(fill="x", padx=10, pady=(2, 10))
 
-    build_model_picker(button_row)
-
     llm_button = tkinter.Button(
         button_row,
         text="Start LLM game",
@@ -568,7 +437,7 @@ def new_game():
     llm_button.config(text="Start LLM game", state="normal")
     stop_button.config(state="disabled")
     set_llm_output(
-        "Model: " + current_model()["id"] + "\nPress start LLM game to let the model play this match\n"
+        "Model: " + model_id + "\nPress start LLM game to let the model play this match\n"
     )
     clear_message()
 
@@ -805,7 +674,7 @@ def ask_for_api_key():
 #FROM DOCS
 def test_api_key(candidate_key):
     body = json.dumps({
-        "model": models[0]["id"],
+        "model": model_id,
         "messages": [{"role": "user", "content": "Hi"}],
         "max_tokens": 1,
     }).encode("utf-8")
@@ -859,7 +728,7 @@ def start_llm():
     streaming_reasoning_shown = 0
     llm_retries = 0
     llm_restarts = 0
-    set_llm_output("Model: " + current_model()["id"] + "\n\n")
+    set_llm_output("Model: " + model_id + "\n\n")
     request_llm_guess()
 
 
@@ -901,7 +770,7 @@ def call_openrouter(which_game, messages, cancel):
         thinking = {"max_tokens": max_think_tokens}
 
     body = json.dumps({
-        "model": current_model()["id"],
+        "model": model_id,
         "messages": messages,
         "reasoning": thinking,
         "max_tokens": max_reply_tokens,
