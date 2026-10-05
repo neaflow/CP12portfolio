@@ -27,7 +27,6 @@ max_restarts = 3
 #the only model this game uses. the other ones are just not good enough. i can't figure out how to fix them. i've tried for hours. if you think you can fix it, godspeed.
 model_id = "openai/gpt-6-luna"
 
-
 system_prompt = """You're playing Wordle. The answer is a common five-letter English word. You have six guesses.
 ON YOUR FIRST TURN there is no feedback yet, because you have not guessed anything. Just pick a strong opening word and go. Do not ask me for feedback, do not ask what the rules are, do not ask for the board. I will always send you feedback after every guess, so on later turns the feedback for your last guess is at the bottom of my message.
 Answer format, follow it exactly every time:
