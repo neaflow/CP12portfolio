@@ -25,6 +25,18 @@ while True:
         print("enter a NUMBER.")
         playertwohealth = input("enter a number for the health of player 2 (leave blank for 100): ")
 
+howmuchshouldusepotions=input("how frequent should potions be used (leave blank for 10% chance")
+while True:
+    try:
+        if howmuchshouldusepotions.strip():
+            howmuchshouldusepotions = int(howmuchshouldusepotions)
+        if not howmuchshouldusepotions.strip():#if empty
+            howmuchshouldusepotions = 10
+        break
+    except ValueError:
+        print("enter a NUMBER.")
+        howmuchshouldusepotions = input("how frequent should potions be used (leave blank for 10% chance")
+
 while (playeronehealth >0 or playertwohealth >0):
     #player 1 attack
     playeroneattack=random.randint(1, 6)
