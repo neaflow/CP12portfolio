@@ -1,12 +1,14 @@
 #NOTE: a lot of this code was *borrowed* from OpenAI and openrouter docs. shoutout them. the rest was written by me running on fumes in a 13-hours straight session
 #i had to make sure that these were all installed on the school comptuers without needing to pip install anything
 from pathlib import Path#finding words.txt
+from datetime import date#use the computer's local date for the official puzzle
 import json#openrouter api sends json
 import queue#need this for streaming token by token
 import random#randomly choose the answer word
 import re#finding GUESS: xxxxx in the LLM response and setting it as the guess
 import threading#makes the LLM stuff run seperately from the widnow so the windoew doens't freeze while the llm works
 import tkinter#making the winow
+from tkinter import messagebox, simpledialog
 from urllib.error import HTTPError, URLError#errors
 from urllib.request import Request, urlopen#making requests on the internet
 
@@ -70,6 +72,13 @@ colors = {
 }
 
 all_words = []
+word_source = "random"
+custom_word = ""
+word_source_var = None
+word_source_button = None
+word_results = queue.Queue()
+word_request_id = 0
+word_loading = False
 
 #this is where the answer the player has to guess is kept
 answer = ""
@@ -132,6 +141,90 @@ def load_words():
     words.sort()
     return words
 
+
+def fetch_official_word(day):
+    # Asking for an explicit local date avoids the server's timezone deciding today.
+    day_text = day.isoformat()
+    request = Request(
+        "https://www.nytimes.com/svc/wordle/v2/" + day_text + ".json",
+        headers={"User-Agent": "AIdle/1.0"},
+    )
+    with urlopen(request, timeout=15) as response:
+        data = json.load(response)
+    if not isinstance(data, dict) or data.get("print_date") != day_text:
+        raise ValueError("The server returned a puzzle for a different date.")
+    solution = data.get("solution")
+    if not isinstance(solution, str) or re.fullmatch(r"[a-zA-Z]{5}", solution) is None:
+        raise ValueError("The server did not return a five-letter answer.")
+    return solution.lower()
+
+
+def is_valid_guess(guess):
+    # The official answer might not be in our local dictionary.
+    return guess == answer or guess in all_words
+
+
+def choose_word_source(source):
+    global word_source, custom_word
+
+    if source == "custom":
+        while True:
+            value = simpledialog.askstring(
+                "Choose answer", "Enter a five-letter answer from the dictionary (A-Z):",
+                initialvalue=custom_word, parent=root,
+            )
+            if value is None:
+                word_source_var.set(word_source)
+                return
+            value = value.strip().lower()
+            if re.fullmatch(r"[a-z]{5}", value) is None:
+                messagebox.showerror("Invalid answer", "Use exactly five letters, A-Z.", parent=root)
+                continue
+            if value not in all_words:
+                messagebox.showerror("Invalid answer", "That word is not in the dictionary.", parent=root)
+                continue
+            custom_word = value
+            break
+
+    word_source = source
+    word_source_var.set(source)
+    labels = {"random": "Random", "official": "Today's Wordle", "custom": "Custom"}
+    word_source_button.config(text="Word: " + labels[source] + " \u25be")
+    new_game()
+
+
+def load_official_word(request_id, day, on_ready):
+    # This worker only touches the queue, never Tkinter widgets.
+    try:
+        solution = fetch_official_word(day)
+        word_results.put((request_id, solution, None, on_ready))
+    except (OSError, URLError, ValueError) as error:
+        word_results.put((request_id, None, str(error), on_ready))
+
+
+def check_word_responses():
+    global word_loading
+
+    try:
+        while True:
+            try:
+                request_id, solution, error, on_ready = word_results.get_nowait()
+            except queue.Empty:
+                break
+            if request_id != word_request_id:
+                continue
+            word_loading = False
+            if error is not None:
+                show_message("Could not load today's Wordle: " + error
+                             + "\nCurrent game unchanged. Try New Game again.", duration=None)
+                continue
+            reset_game(solution)
+            if on_ready is not None:
+                on_ready()
+    finally:
+        root.after(100, check_word_responses)
+
+
 def score_guess(guess, answer):
     marks = ["absent"] * word_length
     still_left = list(answer)
@@ -171,9 +264,6 @@ def describe_guess(guess, states):
 
 
 def check_guess(guess):
-    # see if the model broke a rule it should already know about, like playing
-    # a letter that was ruled out. the weak models do this a lot, so we catch
-    # it and tell them why instead of wasting a turn on it
     if guess in llm_guesses:
         return ""
 
@@ -261,6 +351,7 @@ def add_key(parent, label, command, wide=False):
 def build_the_game():
     global all_words, responses, stream_tokens
     global message_label, tiles, key_buttons, llm_output, llm_button, stop_button
+    global word_source_var, word_source_button
 
     all_words = load_words()
 
@@ -282,7 +373,7 @@ def build_the_game():
         fg=colors["text"],
     ).pack(side="left")
     
-    # the stop button sits left of new game, so it reads left to right
+    # Right-packed controls read: answer source, New Game, Stop.
     stop_button = tkinter.Button(
         header,
         text="Stop",
@@ -307,6 +398,24 @@ def build_the_game():
         pady=5,
     ).pack(side="right")
 
+    word_source_var = tkinter.StringVar(root, value=word_source)
+    word_source_button = tkinter.Menubutton(
+        header, text="Word: Random \u25be", font=("Helvetica", 10, "bold"),
+        relief="flat", bg=colors["key"], padx=10, pady=5,
+    )
+    word_menu = tkinter.Menu(word_source_button, tearoff=False)
+    for source, label in (
+        ("random", "A. Random dictionary word"),
+        ("official", "B. Today's official Wordle"),
+        ("custom", "C. Specify a word..."),
+    ):
+        word_menu.add_radiobutton(
+            label=label, variable=word_source_var, value=source,
+            command=lambda source=source: choose_word_source(source),
+        )
+    word_source_button.config(menu=word_menu)
+    word_source_button.pack(side="right", padx=(0, 6))
+
     #message text for the user not the llm
     message_label = tkinter.Label(
         root,
@@ -315,6 +424,7 @@ def build_the_game():
         bg=colors["background"],
         fg=colors["text"],
         height=2,
+        wraplength=780,
     )
     message_label.pack()
 
@@ -406,11 +516,33 @@ def build_the_game():
     root.bind("<Key>", on_keypress)
     new_game()
     root.after(100, check_llm_responses)
+    root.after(100, check_word_responses)
     #immediately ask for api key for OR
     root.after(200, prompt_for_key)
 
 
-def new_game():
+def new_game(on_ready=None):
+    global word_request_id, word_loading
+
+    # Ignore late official answers if another game/source was chosen meanwhile.
+    word_request_id += 1
+    word_loading = word_source == "official"
+    if word_loading:
+        day = date.today()
+        show_message("Loading official Wordle for " + day.isoformat() + "...", duration=None)
+        threading.Thread(
+            target=load_official_word,
+            args=(word_request_id, day, on_ready), daemon=True,
+        ).start()
+        return
+
+    solution = custom_word if word_source == "custom" else random.choice(all_words)
+    reset_game(solution)
+    if on_ready is not None:
+        on_ready()
+
+
+def reset_game(solution):
     global game_id, answer, current_row, current_guess, finished, key_states
     global llm_guesses, llm_messages
     global llm_active, llm_waiting, llm_closing, streaming_reasoning_shown
@@ -421,7 +553,7 @@ def new_game():
     if current_cancel is not None:
         current_cancel.set()
     current_cancel = None
-    answer = random.choice(all_words)
+    answer = solution
     current_row = 0
     current_guess = []
     finished = 0
@@ -535,7 +667,7 @@ def submit_guess():
         return
 
     guess = "".join(current_guess).lower()
-    if guess not in all_words:
+    if not is_valid_guess(guess):
         show_message("not in word list")
         #
         if llm_active == 1:
@@ -711,15 +843,18 @@ def prompt_for_key():
 
 #the start llm game button was pressed
 def start_llm():
-
-    global llm_active, llm_messages, llm_guesses, streaming_reasoning_shown, llm_retries, llm_restarts
-
     if api_key == "":
         if ask_for_api_key() == False:
             append_llm_output("API key not entered. LLM play cancelled.\n")
             return
-    if finished == 1 or len(llm_guesses) > 0 or current_row > 0:
-        new_game()
+    if word_source == "official" or finished == 1 or len(llm_guesses) > 0 or current_row > 0:
+        new_game(on_ready=begin_llm)
+        return
+    begin_llm()
+
+
+def begin_llm():
+    global llm_active, llm_messages, llm_guesses, streaming_reasoning_shown, llm_retries, llm_restarts
 
     llm_active = 1
     llm_button.config(text="LLM playing...", state="disabled")
@@ -962,7 +1097,7 @@ def check_llm_responses():
                 })
                 request_llm_guess()
                 continue
-            if guess not in all_words:
+            if not is_valid_guess(guess):
                 append_llm_output(
                     "Invalid guess: " + guess.upper() + " is not in the word list. Asking again.\n"
                 )
@@ -1036,21 +1171,23 @@ def finish_llm(message):
     request_llm_guess()
 
 
-def show_message(text, color=colors["text"]):
+def show_message(text, color=colors["text"], duration=2000):
     # the line of text above the board. it only shows for a couple of seconds and
     # then goes blank again, so it never sits there with old text in it
     global message_timer
 
-    if message_timer is not None:
-        root.after_cancel(message_timer)
+    clear_message()
     message_label.config(text=text, fg=color)
-    message_timer = root.after(2000, clear_message)
+    if duration is not None:
+        message_timer = root.after(duration, clear_message)
 
 
 def clear_message():
     # wipe the line of text above the board once the message has had its time
     global message_timer
 
+    if message_timer is not None:
+        root.after_cancel(message_timer)
     message_timer = None
     message_label.config(text="")
 

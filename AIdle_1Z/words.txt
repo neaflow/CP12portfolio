@@ -3490,7 +3490,6 @@ myron
 myrrh
 mysql
 myths
-naacp
 nabob
 nacho
 nacre
