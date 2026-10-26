@@ -11,15 +11,15 @@ numbersandoperations.append(number)
 lenoflist = 1
 
 while True:
-    operation = input("Enter an operation (+, -, *, /, =): ")
-    while operation not in ['+', '-', '*', '/', '=']:
+    operation = input("Enter an operation (+, -, , /, ^, =): ")
+    while operation not in ['+', '-', '', '/', '^', '=']:
         print("Invalid operation. Please enter a valid operation.")
-        operation = input("Enter an operation (+, -, *, /, =): ")
+        operation = input("Enter an operation (+, -, , /, ^, =): ")
 
 
     if operation == '=':
         break
-    
+
     numbersandoperations.append(operation)
     lenoflist += 1
 
@@ -34,30 +34,56 @@ while True:
     numbersandoperations.append(num2)
     lenoflist += 1
     print(numbersandoperations)
-    
-resultsofar = numbersandoperations[0]
+
 print(lenoflist)
-for i in range(1, len(numbersandoperations), 2):
-    print("len of list: ", lenoflist)
-    print("ran")
-    print(i)
-    print(numbersandoperations[i])
 
-    operation = numbersandoperations[i]
-    next_number = numbersandoperations[i + 1]
 
+def do_operation(left, right, operation):
     if operation == '+':
-        resultsofar = resultsofar + next_number
+        return left + right
     elif operation == '-':
-        resultsofar = resultsofar - next_number
-    elif operation == '*':
-        resultsofar = resultsofar * next_number
+        return left - right
+    elif operation == '':
+        return left * right
     elif operation == '/':
-        if next_number == 0:
-            print("Error: Division by zero is not allowed.")
-            continue
-        resultsofar = resultsofar / next_number
+        if right == 0:
+            print("Can't divide by 0")
+            return None
+        return left / right
+    elif operation == '^':
+        if left == 0 and right < 0:
+            print("Can't raise 0 to a negative power.")
+            return None
+        powered = left ** right
+        #
+        if isinstance(powered, complex):#breaks with complex numbers; I don't want to deal with them in this calculator
+            print("Error: That exponent produces a complex (non-real) result.")
+            return None
+        return powered
 
-    print("Result so far: ", resultsofar)
 
-print("Result: ", resultsofar)
+def evaluate(numbersandoperations):
+    #work on a copy so the list we collected from the user stays unchanged in case we need it later
+    expression = list(numbersandoperations)
+
+    # One pass per level of the order of operations. Each pass keeps going
+    # until that level has no operations left, then moves to the next level.
+    for operator_group in (('^',), ('*', '/'), ('+', '-')):#order of ops (opps)
+        i = 1
+        while i < len(expression):
+            if expression[i] in operator_group:
+                result = do_operation(expression[i - 1], expression[i + 1], expression[i])
+                if result is None:
+                    #just delete the ones that can't be done
+                    del expression[i:i + 2]
+                else:
+                    expression[i - 1:i + 2] = [result]
+                #
+                #
+            else:
+                i += 2
+
+    return expression[0]
+
+answer = evaluate(numbersandoperations)
+print("Result: ", answer)
