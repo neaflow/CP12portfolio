@@ -1,41 +1,52 @@
-numbersandoperations = []
-number = input("Enter a number: ")
-while True:
-    try:
-        number = (float(number))
-        break
-    except ValueError:
-        number = input("Invalid input. Please enter a valid number. ")
-
-numbersandoperations.append(number)
-lenoflist = 1
-
-while True:
-    operation = input("Enter an operation (+, -, , /, ^, =): ")
-    while operation not in ['+', '-', '', '/', '^', '=']:
-        print("Invalid operation. Please enter a valid operation.")
-        operation = input("Enter an operation (+, -, , /, ^, =): ")
+import contextlib
+import io
 
 
-    if operation == '=':
-        break
+def parse(expression):
+    """Turn the text into a list like [number, operation, number, ...].
+    Returns None if the text contains something invalid."""
+    numbersandoperations = []
 
-    numbersandoperations.append(operation)
-    lenoflist += 1
+    #turn the text into a list like [number, operation, number, ...]
+    #parentheses also get their own spot in the list
+    number = ''
+    for character in expression:
+        if character in '0123456789.':# '.' included so decimals can work
+            number += character
+        elif character in '+-*/^()':
+            if number != '':
+                try:
+                    numbersandoperations.append(float(number))#if the number before this expression is valid
+                except ValueError:
+                    print("Invalid number:", number)
+                    return None
+                number = ''#if we hit an expression then there are no more digits in the nuymber
+            numbersandoperations.append(character)
+        elif character != ' ':
+            print("Invalid character in expression:", character)
+            return None
 
-    num2 = input("Enter another number: ")
-    while True:
+    if number != '':
         try:
-            num2 = (float(num2))
-            break
+            numbersandoperations.append(float(number))
         except ValueError:
-            num2 = input("Invalid input. Please enter a valid number. ")
+            print("Invalid number:", number)
+            return None
 
-    numbersandoperations.append(num2)
-    lenoflist += 1
-    print(numbersandoperations)
+    i = 0
+    while i < len(numbersandoperations):
+        if numbersandoperations[i] in ['+', '-'] and (i == 0 or numbersandoperations[i - 1] in ['+', '-', '*', '/', '^', '(']):#checks if it's a sign as opposed to an operation
+            if i + 1 < len(numbersandoperations) and isinstance(numbersandoperations[i + 1], float):
+                if numbersandoperations[i] == '-':
+                    numbersandoperations[i + 1] = -numbersandoperations[i + 1]
+                del numbersandoperations[i]
+            else:
+                print("Error: an operation needs a number after it.")
+                return None
+        else:
+            i += 1
 
-print(lenoflist)
+    return numbersandoperations
 
 
 def do_operation(left, right, operation):
@@ -43,7 +54,7 @@ def do_operation(left, right, operation):
         return left + right
     elif operation == '-':
         return left - right
-    elif operation == '':
+    elif operation == '*':
         return left * right
     elif operation == '/':
         if right == 0:
@@ -66,8 +77,40 @@ def evaluate(numbersandoperations):
     #work on a copy so the list we collected from the user stays unchanged in case we need it later
     expression = list(numbersandoperations)
 
-    # One pass per level of the order of operations. Each pass keeps going
-    # until that level has no operations left, then moves to the next level.
+    if len(expression) == 0:
+        print("Error: there is nothing to calculate.")
+        return None
+
+    #solve whatever is inside parentheses first, starting with the innermost pair
+    while '(' in expression or ')' in expression:
+        if ')' not in expression:
+            print("Error: a '(' is missing its ')'.")
+            return None
+        closebracket = expression.index(')')#gets the first one
+        openbracket = closebracket - 1
+        while openbracket >= 0 and expression[openbracket] != '(':
+            openbracket -= 1
+        if openbracket < 0:
+            print("Error: a ')' is missing its '('.")
+            return None
+        inside = evaluate(expression[openbracket + 1:closebracket])
+        if inside is None:
+            return None
+        expression[openbracket:closebracket + 1] = [inside]#replace the brackets and the matix in the brackets with the result and then go back to the beginning of this loop until no brackets
+
+    if len(expression) % 2 == 0:
+        print("the expression is incomplete.")
+        return None
+
+    #make sure the list still looks like: number, operation, number, operation, ...
+    for i in range(len(expression)):
+        if i % 2 == 0 and not isinstance(expression[i], float):
+            print("Error: expected a number but found", expression[i])
+            return None
+        elif i % 2 == 1 and not isinstance(expression[i], str):
+            print("Error: expected an operation but found", expression[i])
+            return None
+
     for operator_group in (('^',), ('*', '/'), ('+', '-')):#order of ops (opps)
         i = 1
         while i < len(expression):
@@ -85,5 +128,23 @@ def evaluate(numbersandoperations):
 
     return expression[0]
 
-answer = evaluate(numbersandoperations)
-print("Result: ", answer)
+
+def calculate(text, show_tokens=False):
+    """Run the calculator on some text and return the messages it printed,
+    so a UI can display them instead of the console."""
+    output = io.StringIO()
+    with contextlib.redirect_stdout(output):
+        tokens = parse(text)
+        if tokens is not None and show_tokens:
+            print(tokens)
+        answer = evaluate(tokens) if tokens is not None else None
+        if answer is None:
+            print("Could not calculate the expression.")
+        else:
+            print("Result:", answer)
+    return output.getvalue().strip()
+
+
+if __name__ == "__main__":
+    text = input("Enter an expression (for example: 3 + 4 * (2 - 1)): ")
+    print(calculate(text, show_tokens=True))
