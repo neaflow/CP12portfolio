@@ -129,9 +129,10 @@ def evaluate(numbersandoperations):
     return expression[0]
 
 
-def calculate(text, show_tokens=False):
-    """Run the calculator on some text and return the messages it printed,
-    so a UI can display them instead of the console."""
+def solve(text, show_tokens=False):
+    """Run the calculator on some text and return (answer, messages).
+    answer is None when the expression could not be calculated, and
+    messages holds everything that would normally be printed to the console."""
     output = io.StringIO()
     with contextlib.redirect_stdout(output):
         tokens = parse(text)
@@ -142,7 +143,13 @@ def calculate(text, show_tokens=False):
             print("Could not calculate the expression.")
         else:
             print("Result:", answer)
-    return output.getvalue().strip()
+    return answer, output.getvalue().strip()
+
+
+def calculate(text, show_tokens=False):
+    """Run the calculator on some text and return the messages it printed,
+    so a UI can display them instead of the console."""
+    return solve(text, show_tokens)[1]
 
 
 if __name__ == "__main__":
